@@ -1,28 +1,19 @@
-#!/usr/bin/python3
+#!/usr/bin/python
 from collections import Counter
 import re
-import base64
+from base64 import b64decode
 
 #English character frequencies
 rel_freq = {'e':12.7, 't': 9.0, 'a': 8.1, 'o': 7.5, 'i': 7.0, 'n': 6.7, 's': 6.4, 'h': 6.1, 'r':6.0, 'd': 4.3, 'l': 4.0, 'c': 2.8, 'u': 2.6, 'm': 2.4, 'w': 2.4, 'f': 2.2, 'g': 2.0, 'y': 2.0, 'p': 1.9, 'b': 1.5, 'v': 1.0, 'k': 0.8, 'j': 0.2, 'x': 0.2, 'q': 0.1, 'z': 0.1}
 
-def hex_to_b64( n: str):
-    '''converts hex string to base 64 string'''
-    e = n.encode('ascii')
-    msg = base64.b16decode(e)
-    return base64.b64encode(msg).decode('ascii')
 
-def b64_to_hex( n: str ):
-    '''converts base 64 string to hex string'''
-    e = n.encode('ascii')
-    msg = base64.b64decode(e)
-    return base64.b16encode(msg).decode('ascii')
+def XOR(b1, b2):
+    '''XOR two bytes objects''' 
+    assert len(b1) == len(b2)
+    bts = [bytes.fromhex(format(a^b, '02x')) for a,b in zip(b1, b2)]
+    return b''.join(bts)
 
-def XOR( n: str , m: str):
-    '''Takes two hex strings n and m and returns XOR'''
-    return format(int(n, 16)^int(m, 16), 'x')
-
-def freq_score( w: str ):
+def freq_score( w):
     '''absolute difference between average English character frequency and character frequency of w'''
     score = 0
     for i in range(len(w)):
@@ -33,64 +24,69 @@ def freq_score( w: str ):
     score += sum([abs(counts[k]//len(w) - rel_freq[k]) for k in counts ])
     return score
 
-def decode_1char_XOR( n : str ):
-    '''Decodes hex string that has been XORd with one-character key.
-    Returns None if no decoding is found'''
+def decode_1chr_XOR(b):
+    '''Decodes hex string that has been XORd with one-character key.'''
     L = {}
-    for m in range(0, 127):
-        key = format(m, 'x')
-        key = key*(len(n)//len(key))
+    for m in range(127):
+        key = bytes.fromhex(format(m, '02x'))
+        key *= len(b) 
         try:
-            L[chr(m)] = bytearray.fromhex(XOR(n, key)).decode()
+            L[chr(m)] = XOR(b, key).decode('utf-8')
         except:
             continue
-    if L == {}:
-        return
-    minkey = min(L, key = lambda k: freq_score(L[k]))
-    return L[minkey] 
+    if L:
+        minkey = min(L, key = lambda k: freq_score(L[k]))
+        return L[minkey] 
 
-def encode_XOR( w: str, key : str ):
-    '''Encodes w with repeating XOR key and returns a hex string'''
-    e = w.encode('ascii').hex()
-    key *= len(w)//len(key) +1
-    k = key[:len(w)].encode('ascii').hex()
-    return XOR(e, k)
+def encode_XOR(b, key):
+    '''Encodes w with repeating XOR key '''
+    k = key*(len(b)//len(key) +1)
+    return XOR(b, k[:len(b)])
 
-def hamming_dist(n: str, m: str):
-    a = bin(int.from_bytes(n.encode(), 'big'))
-    b = bin(int.from_bytes(m.encode(), 'big'))
-    d = format(int(a, 2)^int(b, 2), 'b')
-    return sum([int(i) for i in d])
+def hamming_dist(b1, b2):
+    ans = 0
+    for a, b in zip(b1, b2):
+        c = a^b
+        n_ones = 0
+        while c > 0:
+            n_ones += c & 1
+            c = c>>1
+        ans += n_ones
+    return ans
 
-def decode_XOR(w: str):
-    k = sorted(range(2,42), key = lambda keysize: (hamming_dist(w[:keysize],w[keysize:2*keysize]))/keysize) 
-    keysize = k[0]
-    L=[]
-    for j in range(keysize,2):
-        block = ""
-        for a,b in zip(w[j::keysize], w[j+1::keysize]):
-            block += a + b
-        L.append(decode_1char_XOR(block))
-    print(L)
-    print(f"keysize = {keysize}")
+def decode_XOR(b):
+    '''Decode repeating key XOR with top three keysizes'''
+    k = sorted(range(1,42), key = lambda keysize: (hamming_dist(b[2*keysize:3*keysize],b[3*keysize:4*keysize]))/keysize) 
+    msgs = []  
+    for keysize in k[:3]:
+        L= [decode_1chr_XOR(b[j::keysize]) for j in range(keysize)]
+        msg = ""
+        for l in zip(*L):
+            msg += ''.join(l)
+        msgs.append(msg)
+    return msgs
 
 if __name__ == '__main__':
     #Challenge 3
-    #s = '1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736'
-    #print(decode_1char_XOR(s))
+    #s = bytes.fromhex('1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736')
+    #print(decode_1chr_XOR(s))
     
     #Challenge 4
     #with open('4.txt','r') as f:
-    #    for msg in f.readlines():
-    #        if decode_1char_XOR(msg) != None:
-    #            print(decode_1char_XOR(msg))
+    #    for e in f.readlines():
+    #        msg = decode_1chr_XOR(bytes.fromhex(e))
+    #        if msg:
+    #            print(msg)
 
     #Challenge 5
-    #msg = "Burning 'em, if you ain't quick and nimble\nI go crazy when I hear a cymbal"
-    #print(encode_XOR(msg,'ICE'))
+    #msg = b"Burning 'em, if you ain't quick and nimble\nI go crazy when I hear a cymbal"
+    #print(encode_XOR(msg,b'ICE').hex())
 
-    with open('6.txt') as f:
-        l = f.read()
-        l = re.sub('\n','',l)
-    w = b64_to_hex(l) 
-    decode_XOR(w)
+    #Challenge 6
+    #with open('6.txt') as f:
+    #    l = f.read().replace('\n','')
+    #e = b64decode(l) 
+    #print(decode_XOR(e))
+
+
+
