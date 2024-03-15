@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 itertools = "0.12.1"
 openssl = "0.10.64"
+rand = "0.8.5"
