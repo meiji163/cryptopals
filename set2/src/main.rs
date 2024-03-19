@@ -15,11 +15,16 @@ dXN0IHRvIHNheSBoaQpEaWQgeW91IHN0b3A/IE5vLCBJIGp1c3QgZHJvdmUg\
 YnkK";
 
 fn main() -> io::Result<()> {
-    println!("{:?}", challenge_12());
-    // match challenge_10() {
-    //     Ok(s) => println!("{}", s),
-    //     Err(err) => println!("Error: {:?}", err),
-    // }
+    match challenge_10() {
+        Ok(s) => println!("{}", s),
+        Err(err) => println!("Error: {:?}", err),
+    }
+
+    // challenge 12
+    let decrypted_12 = challenge_12();
+    let decrypted_str = String::from_utf8(decrypted_12).expect("invalid bytes");
+    println!("{}", decrypted_str);
+
     Ok(())
 }
 
@@ -42,30 +47,36 @@ fn challenge_10() -> io::Result<String> {
 
 fn challenge_12() -> Vec<u8> {
     let block_len = 16;
+    let str_len = 138; // length of unknown bytes
+    let n = 144;
 
     let mut decrypted: Vec<u8> = vec![];
-    let mut input_bytes = vec![0; block_len];
+    let mut input_bytes = vec![0; n];
 
-    for _ in 0..CHALLENGE_12_STRING.len() {
+    for i in 0..str_len {
         let cipher_blocks: Vec<Vec<u8>> = (0..=255)
             .map(|b| {
-                input_bytes[block_len - 1] = b;
-                let mut cipher = encryption_oracle_ecb(&input_bytes);
-                cipher.truncate(block_len);
-                return cipher;
+                input_bytes[n - 1] = b;
+                let cipher = encryption_oracle_ecb(&input_bytes);
+                return cipher[n - block_len..n].to_vec();
             })
             .collect();
-        let plaintext = input_bytes[0..block_len - 1].to_vec();
+
+        let plaintext = input_bytes[0..n - i - 1].to_vec();
         let ciphertext = encryption_oracle_ecb(&plaintext);
         let decrypted_byte = (0..=255)
-            .filter(|&b| ciphertext[0..block_len].iter().eq(cipher_blocks[b].iter()))
+            .filter(|&b| {
+                ciphertext[n - block_len..n]
+                    .iter()
+                    .eq(cipher_blocks[b].iter())
+            })
             .next()
             .unwrap();
-
         decrypted.push(decrypted_byte as u8);
-        input_bytes.remove(0);
-        input_bytes.push(decrypted_byte as u8);
-        println!("decrypted {}", decrypted_byte);
+
+        // shift input bytes
+        input_bytes[n - i - 2..n - 1].copy_from_slice(&decrypted[0..]);
+        input_bytes[n - 1] = 0;
     }
     decrypted
 }
